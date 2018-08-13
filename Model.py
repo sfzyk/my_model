@@ -1,6 +1,4 @@
-import torch
 import torch.nn as nn
-
 from Layers import EncoderLayer
 
 __author__ = "Li Xi"
@@ -18,4 +16,7 @@ class MyModel(nn.Module):
         out = self.encoder(enc_input)
 
         return out
+
+
+
 

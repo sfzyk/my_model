@@ -130,7 +130,6 @@ class AspectAttention(nn.Module):
 
         outputs = []
 
-
         for i in range(len(batch_h)):
             out = torch.matmul(batch_h[i], self.W_a) + self.b_a
             out = self.tanh(out)
@@ -141,15 +140,31 @@ class AspectAttention(nn.Module):
             out_blocks = torch.chunk(out, self.n_block, 0)
             blocks = []
             for j in range(len(out_blocks)):
-                blocks.append(torch.sum(out_blocks[j]).view(1,1))
-
+                blocks.append(torch.sum(out_blocks[j]).view(1, 1))
 
             out = torch.cat(blocks, 0)
             out = out.view(1, self.n_block)
-            print(out.size())
             outputs.append(out)
 
         outputs = torch.cat(outputs, 1)
         outputs = outputs.view(bm_size, self.n_block)
 
         return outputs
+
+
+class FinalSoftmax(nn.Module):
+
+    def __init__(self, n_block, num_class):
+        super(FinalSoftmax, self).__init__()
+
+        self.n_block = n_block
+        self.num_class = num_class
+
+        self.linear = Linear(self.n_block, self.num_class)
+        self.softmax = Softmax()
+
+    def forward(self, sente):
+        out = self.linear(sente)
+        out = self.softmax(out)
+
+        return out

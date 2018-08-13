@@ -1,9 +1,10 @@
 import torch
 import torch.nn as  nn
 from torch.nn import init
-from SubLayers import WAN, REN, AspectAttention
+from SubLayers import WAN, REN, AspectAttention, FinalSoftmax
 
 __author__ = "Li Xi"
+
 
 class EncoderLayer(nn.Module):
     def __init__(self, n_head, d_model, d_k, d_v, n_block, dropout=0.1):
@@ -27,8 +28,14 @@ class EncoderLayer(nn.Module):
 
 
 class DecoderLayer(nn.Module):
-    def __init__(self):
+    def __init__(self, n_block, num_class):
         super(DecoderLayer, self).__init__()
 
-    def forward(self, *input):
-        return None
+        self.n_block = n_block
+        self.num_class = num_class
+
+        self.softmax = FinalSoftmax(self.n_block, self.num_class)
+
+    def forward(self, inputs):
+        outputs = self.softmax(inputs)
+        return outputs

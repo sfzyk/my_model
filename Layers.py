@@ -20,6 +20,8 @@ class EncoderLayer(nn.Module):
     # enc_input consists word embedding and position embedding
     # enc_aspect consists aspect embedding
     def forward(self, enc_input, slf_attn_mask=None):
+
+
         enc_output, enc_slf_attn = self.slf_attn(
             enc_input, enc_input, enc_input, attn_mask=slf_attn_mask)
         out1 = self.rnn(enc_input, enc_output, self.state)

@@ -13,4 +13,4 @@ num_class = 3
 
 model = MyModel(n_head, d_model, d_k, d_v, n_block, num_class, dropout=0.1)
 
-summary(model, (10, 512))
+summary(model, (100, 512))

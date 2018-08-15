@@ -6,6 +6,16 @@ from Modules import ScaledDotProductAttention, LayerNormalization, RNN_cell
 __author__ = "Li Xi"
 
 
+class SentenceEmbedding(nn.Module):
+
+    def __init__(self):
+        super(SentenceEmbedding, self).__init__()
+
+    def forward(self, sentence):
+        return None
+
+
+
 class WAN(nn.Module):
     '''WAN module'''
 
@@ -161,7 +171,7 @@ class FinalSoftmax(nn.Module):
         self.num_class = num_class
 
         self.linear = Linear(self.n_block, self.num_class)
-        self.softmax = Softmax()
+        self.softmax = Softmax(dim=1)
 
     def forward(self, sente):
         out = self.linear(sente)

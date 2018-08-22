@@ -1,18 +1,11 @@
+import numpy as np
 import torch
 import torch.nn as nn
-from torch.nn import init, Linear, Tanh, Softmax
-from Modules import ScaledDotProductAttention, LayerNormalization, RNN_cell
+from torch.nn import init, Linear, Tanh, Softmax, Sigmoid, PReLU
+
+from Modules import ScaledDotProductAttention, LayerNormalization
 
 __author__ = "Li Xi"
-
-
-class SentenceEmbedding(nn.Module):
-
-    def __init__(self):
-        super(SentenceEmbedding, self).__init__()
-
-    def forward(self, sentence):
-        return None
 
 
 
@@ -83,7 +76,67 @@ class REN(nn.Module):
         self.d_model = d_model
         self.n_block = n_block
 
-        self.cell = RNN_cell(self.n_block, self.d_model)
+        self.keys = nn.Parameter(torch.FloatTensor(self.n_block, self.d_model))
+        self.V_m = nn.Parameter(torch.FloatTensor(1, self.d_model))
+
+        self.U = nn.Parameter(torch.FloatTensor(self.d_model, self.d_model))
+        self.U_bias = nn.Parameter(torch.FloatTensor(self.d_model))
+        self.V = nn.Parameter(torch.FloatTensor(self.d_model, self.d_model))
+        self.W = nn.Parameter(torch.FloatTensor(self.d_model, self.d_model))
+
+        self.sigmoid = Sigmoid()
+        self.prelu = PReLU()
+
+        # The keys can be initialed with embedding
+        # Here we simpliy initial with xavier_normal_
+        init.xavier_normal_(self.keys)
+
+        init.xavier_normal_(self.V_m)
+        init.xavier_normal_(self.U)
+        init.constant_(self.U_bias, 0)
+        init.xavier_normal_(self.V)
+        init.xavier_normal_(self.W)
+
+
+
+    def get_gate(self, state_j, key_j, e, m):
+        # To reservethe  orgin form of the tensor, it is necessary to clone it before transpose
+        e_t = e.clone()
+        m_t = m.clone()
+        e_t.t_()
+        m_t.t_()
+
+        # 1 x 1  be cautious about the order of the parameters
+        a = torch.matmul(key_j, e_t)
+        b = torch.matmul(state_j, e_t)
+        c = torch.matmul(self.V_m, m_t)
+
+        return self.sigmoid(a + b + c)
+
+    def get_candidate(self, state_j, key_j, e, U, V, W, U_bias):
+        # 1 x embed_size
+        key_V = torch.matmul(key_j, V)
+        state_U = torch.matmul(state_j, U) + U_bias
+        input_W = torch.matmul(e, W)
+
+        return self.prelu(state_U + key_V + input_W)
+
+    def rnn_cell(self,e,m,state):
+
+        n_block, embed_size = state.size()
+        state = torch.chunk(state, n_block, 0)
+
+        next_states = []
+        for j in range(n_block):
+            key_j = torch.unsqueeze(self.keys[j], 0)
+            gate_j = self.get_gate(state[j], key_j, e, m)
+            candidate_j = self.get_candidate(state[j], key_j, e, self.U, self.V, self.W, self.U_bias)
+            state_j_next = state[j] + gate_j * candidate_j
+            next_states.append(state_j_next)
+        state_next = torch.cat(next_states, 1)
+        state_next = state_next.view(self.n_block, self.d_model)
+
+        return state_next
 
     def forward(self, e, m, state):
         '''e is the word-pos-embedding; m is the output of WAN; '''
@@ -92,7 +145,6 @@ class REN(nn.Module):
 
         batch_e = torch.chunk(e, bm_size, 0)
         batch_m = torch.chunk(m, bm_size, 0)
-
         outputs = []
 
         for i in range(len(batch_e)):
@@ -106,7 +158,9 @@ class REN(nn.Module):
                 e_k = e_s[k]
                 m_k = m_s[k]
 
-                current_state = self.cell(e_k, m_k, current_state)
+                current_state = self.rnn_cell(e_k, m_k, current_state)
+
+
 
             outputs.append(current_state)
 

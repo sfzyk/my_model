@@ -1,7 +1,9 @@
+import json
+
 import torch
 import torch.nn as  nn
 from torch.nn import init
-from SubLayers import WAN, REN, AspectAttention, FinalSoftmax
+from SubLayers import WAN, REN, FinalSoftmax, AspectAttention
 
 __author__ = "Li Xi"
 
@@ -17,10 +19,10 @@ class EncoderLayer(nn.Module):
         self.rnn = REN(d_model, n_block)
         self.sente_attn = AspectAttention(d_model, n_block)
 
+
     # enc_input consists word embedding and position embedding
     # enc_aspect consists aspect embedding
     def forward(self, enc_input, slf_attn_mask=None):
-
 
         enc_output, enc_slf_attn = self.slf_attn(
             enc_input, enc_input, enc_input, attn_mask=slf_attn_mask)

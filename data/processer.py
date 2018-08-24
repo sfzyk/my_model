@@ -2,11 +2,14 @@
 import collections
 import json
 import xml.dom.minidom
+from operator import itemgetter
 
 import gensim
 import h5py
 import jieba
 import numpy as np
+
+from DataManager import DataManager
 
 gensim_file = 'glove_model.txt'
 
@@ -226,3 +229,53 @@ polarities = f['polarities'].value
 print('sentences shape:', sentences.shape)
 print('categories shape:', categories.shape)
 print('polarities shape:', polarities.shape)
+
+
+# -----------------------------prepare dataset vector dict-----------------------------
+
+data = DataManager('./')
+word_list = data.gen_word()
+train_set, _, _ = data.gen_data()
+
+len_dict = {}
+for item in train_set:
+    sentence_length = len(item['sentence'])
+    if sentence_length in len_dict.keys():
+        len_dict[sentence_length] += 1
+    else:
+        len_dict[sentence_length] = 1
+len_dict = collections.OrderedDict(sorted(len_dict.items(), key=itemgetter(1)))
+print(len_dict)
+exit(0)
+
+gensim_file = './data/glove_model.txt'
+vector_json_file = './data/word2vector.json'
+
+model = gensim.models.KeyedVectors.load_word2vec_format(gensim_file, binary=False)
+print("finish loading model ...")
+
+vector_dict = {}
+cnt = 0
+for word in word_list.keys():
+    index = word_list[word]
+    try:
+        word_vector = model[word].tolist()
+        vector_dict[index] = word_vector
+    except:
+        print("do not have: ", word)
+        pass
+    cnt += 1
+    if cnt % 50 == 0:
+        print("finish solving %d words ..." % cnt)
+print("finish solving %d the words !!!" % cnt)
+
+with open(vector_json_file, "w") as f:
+    json.dump(vector_dict, f)
+    print('vector dictionary done!')
+
+vector_json = open(vector_json_file)
+vector_json = json.load(vector_json)
+print("finish loading vector json ...")
+
+print(len(vector_json))
+print(type(vector_json))

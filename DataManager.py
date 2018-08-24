@@ -105,15 +105,11 @@ class DataManager(object):
 
 class MyDataset(data.Dataset):
     def __init__(self, data, words_vector):
-        '''
-        root is the filepath of dataset
-        x is the input, such as sentence
-        y is the lable, such as aspect class or sentiment class
-        '''
+
         self.data = data
         self.word_vector = words_vector
         self.train_data = torch.FloatTensor(self.load_vector())
-        self.train_lable = torch.FloatTensor(self.get_items('aspect'))
+        self.train_lable = torch.LongTensor(self.get_items('aspect'))
 
     def get_max_sentence_length(self, sentences):
         max_length = 0

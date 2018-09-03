@@ -13,7 +13,7 @@ from DataManager import DataManager
 
 gensim_file = 'glove_model.txt'
 
-'''
+
 print('store train dataset ...')
 data_file = 'SemEval2014/Restaurants_Train_v2.xml'
 index_json_file = 'SemEval2014/SemEval2014_train_index.json'
@@ -34,7 +34,7 @@ dataset_file = 'SemEval2014/dataset_test.h5'
 # sentences shape: (113, 40)
 # categories shape: (113, 5)
 # polarities shape: (113, 3)
-
+'''
 aspect_class = dict()
 aspect_class['ambience'] = 0
 aspect_class['anecdotes'] = 1
@@ -56,7 +56,7 @@ polarities = []
 dom = xml.dom.minidom.parse(data_file)
 root = dom.documentElement
 sentences_root = root.getElementsByTagName('sentence')
-
+exit(0)
 for sentences_single in sentences_root:
     category_root = sentences_single.getElementsByTagName('aspectCategory')
 

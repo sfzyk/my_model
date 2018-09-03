@@ -1,12 +1,10 @@
-import numpy as np
 import torch
 import torch.nn as nn
-from torch.nn import init, Linear, Tanh, Softmax, Sigmoid, PReLU
+from torch.nn import init, Linear, Tanh, Softmax, Sigmoid, PReLU, BatchNorm1d
 
 from Modules import ScaledDotProductAttention, LayerNormalization
 
 __author__ = "Li Xi"
-
 
 
 class WAN(nn.Module):
@@ -63,8 +61,9 @@ class WAN(nn.Module):
         # project back to residual size
         outputs = self.proj(outputs)
         outputs = self.dropout(outputs)
+        outputs = self.layer_norm(outputs + residual)
 
-        return self.layer_norm(outputs + residual), attns
+        return outputs, attns
 
 
 class REN(nn.Module):
@@ -97,8 +96,6 @@ class REN(nn.Module):
         init.xavier_normal_(self.V)
         init.xavier_normal_(self.W)
 
-
-
     def get_gate(self, state_j, key_j, e, m):
         # To reservethe  orgin form of the tensor, it is necessary to clone it before transpose
         e_t = e.clone()
@@ -121,7 +118,7 @@ class REN(nn.Module):
 
         return self.prelu(state_U + key_V + input_W)
 
-    def rnn_cell(self,e,m,state):
+    def rnn_cell(self, e, m, state):
 
         n_block, embed_size = state.size()
         state = torch.chunk(state, n_block, 0)
@@ -160,8 +157,6 @@ class REN(nn.Module):
 
                 current_state = self.rnn_cell(e_k, m_k, current_state)
 
-
-
             outputs.append(current_state)
 
         outputs = torch.cat(outputs, 1)
@@ -173,7 +168,7 @@ class REN(nn.Module):
 class AspectAttention(nn.Module):
     '''Aspect attention module'''
 
-    def __init__(self, d_model, n_block):
+    def __init__(self, d_model, n_block, dropout):
         super(AspectAttention, self).__init__()
         self.d_model = d_model
         self.n_block = n_block
@@ -181,21 +176,33 @@ class AspectAttention(nn.Module):
         self.tanh = Tanh()
         self.softmax = Softmax(dim=1)
 
-        self.W_a = nn.Parameter(torch.FloatTensor(self.d_model, self.d_model))
+        self.W_a = nn.Parameter(torch.FloatTensor(self.d_model * 2, self.d_model))
         self.b_a = nn.Parameter(torch.FloatTensor(self.n_block, self.d_model))
 
         init.xavier_normal_(self.W_a)
         init.constant_(self.b_a, 0)
 
-    def forward(self, h):
+        self.dropout = nn.Dropout(dropout)
+        self.batch_norm = BatchNorm1d(self.n_block)
+
+    def forward(self, h, aspect_embedding):
         bm_size, num_block, embed_size = h.size()
+        bm_size, num_aspect, embed_size = aspect_embedding.size()
 
         batch_h = torch.chunk(h, bm_size, 0)
+        batch_aspect = torch.chunk(aspect_embedding, bm_size, 0)
 
         outputs = []
 
         for i in range(len(batch_h)):
-            out = torch.matmul(batch_h[i], self.W_a) + self.b_a
+
+            aspect = batch_aspect[i].view(num_aspect, embed_size)
+            aspect = torch.mean(aspect, dim=0)
+            aspect = aspect.repeat(num_block, 1).view(1, num_block, embed_size)
+
+            h_aspect = torch.cat([batch_h[i], aspect], 2)
+
+            out = torch.matmul(h_aspect, self.W_a) + self.b_a
             out = self.tanh(out)
             out = self.softmax(out)
             out = out * h[i]
@@ -212,23 +219,27 @@ class AspectAttention(nn.Module):
 
         outputs = torch.cat(outputs, 1)
         outputs = outputs.view(bm_size, self.n_block)
-
+        outputs = self.dropout(outputs)
+        outputs = self.batch_norm(outputs)
         return outputs
 
 
 class FinalSoftmax(nn.Module):
 
-    def __init__(self, n_block, num_class):
+    def __init__(self, n_block, num_class, dropout):
         super(FinalSoftmax, self).__init__()
 
         self.n_block = n_block
         self.num_class = num_class
 
-        self.linear = Linear(self.n_block, self.num_class)
+        self.linear = Linear(self.n_block,self.num_class)
+        self.dropout = nn.Dropout(0.5)
         self.softmax = Softmax(dim=1)
 
     def forward(self, sente):
         out = self.linear(sente)
+        out = self.dropout(out)
+        out = self.batch_norm(out)
         out = self.softmax(out)
 
         return out

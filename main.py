@@ -5,6 +5,7 @@ import time
 import torch
 from torch import nn
 from torch.utils import data
+from torchsummary import summary
 
 from DataManager import DataManager, MyDataset
 from Model import MyModel
@@ -12,54 +13,75 @@ from Model import MyModel
 __author__ = "Li Xi"
 
 # --------- parameters -------------------
-n_head = 8
 d_model = 300
+n_head = 6
 d_k = 50
 d_v = 50
-n_block = 6
-dropout = 0.1
-num_class = 5
-batch_size = 25
-lr = 0.01
-epoches = 8
+n_block = 8
+dropout = 0.5  #
+num_class = 3
+batch_size = 256  #
+lr = 0.01  #
+l2_norm = 0.1
+epoches = 10
+max_len = 80
+lable_type = 'sentiment'
 
-# -------- load dataset ------------------
-vector_json_file = 'data/word2vector.json'
+
+# To test the model:
+# 1. Uncomment the follwing line
+# 2. In Model.py, uncomment the first two line in forward function (iminate the aspect input)
+# 3. The output show the model srtucture, including the shape of model and number of parameter
+
+#model = MyModel(n_head, d_model, d_k, d_v, n_block, num_class, max_len, dropout=0.1)
+#summary(model, [max_len, 300])
+#exit(0)
+
+
+# --------------- load dataset ------------------
+# -----------------------------------------------
+
+vector_json_file = 'data/restaurant/word2vector.json'
 index_json = open(vector_json_file)
 words_vector = json.load(index_json)
 print("vector dictionary length: ", len(words_vector))
 
-my_data = DataManager('./data')
+my_data = DataManager('./data/restaurant') #
 word_list = my_data.gen_word()
 train_set, dev_set, test_set = my_data.gen_data()
 
-train_dataset = MyDataset(train_set, words_vector)
+# train set init
+train_dataset = MyDataset(train_set, words_vector, max_len, lable_type)
 train_loader = data.DataLoader(dataset=train_dataset,
                                batch_size=batch_size,
                                shuffle=True)
 print("train set length: ", len(train_dataset))
 
-dev_dataset = MyDataset(dev_set, words_vector)
+# dev set init
+dev_dataset = MyDataset(dev_set, words_vector, max_len, lable_type)
 dev_loader = data.DataLoader(dataset=dev_dataset,
                              batch_size=batch_size,
                              shuffle=True)
 print("dev set length: ", len(dev_dataset))
 
-test_dataset = MyDataset(test_set, words_vector)
+# test set init
+test_dataset = MyDataset(test_set, words_vector, max_len, lable_type)
 test_loader = data.DataLoader(dataset=test_dataset,
                               batch_size=batch_size,
                               shuffle=True)
 print("test set length: ", len(test_dataset))
 
-print("finish load dataset ...")
+print("finish loading dataset ...")
+
 
 # ---------------- model init ------------------------
+# ----------------------------------------------------
 
-model = MyModel(n_head, d_model, d_k, d_v, n_block, num_class, dropout=0.1)
+model = MyModel(n_head, d_model, d_k, d_v, n_block, num_class, max_len, dropout=0.1)
 
 # Loss and Optimizer
 criterion = nn.CrossEntropyLoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=l2_norm)
 
 dev_accus = []
 for epoch in range(epoches):
@@ -70,18 +92,22 @@ for epoch in range(epoches):
     train_acc = 0.
 
     # trianing
-    for i, (x, y) in enumerate(train_loader):
+    # x - sentence embeding
+    # y - sentiment class
+    # z - aspect embeding (may more than one aspect)
+    for i, (x, y, z) in enumerate(train_loader):
         x = torch.FloatTensor(x)
         y = torch.LongTensor(y)
         y = torch.max(y, 1)[1]
+        z = torch.FloatTensor(z)
 
-        # Forward + Backward + Optimize
+
         optimizer.zero_grad()
-        outputs = model(x)
+        outputs = model(x, z)
 
         loss = criterion(outputs, y)
-
         train_loss += loss.data[0]
+
         pred = torch.max(outputs, 1)[1]
         train_correct = (pred == y).sum()
         train_acc += train_correct.data[0]
@@ -101,24 +127,19 @@ for epoch in range(epoches):
     start = time.time()
     dev_loss = 0.
     dev_acc = 0.
-    for i, (x, y) in enumerate(dev_loader):
+    for i, (x, y, z) in enumerate(dev_loader):
         x = torch.FloatTensor(x)
         y = torch.LongTensor(y)
         y = torch.max(y, 1)[1]
 
-        # Forward + Backward + Optimize
-        optimizer.zero_grad()
-        outputs = model(x)
-
+        # Forward
+        outputs = model(x, z)
         loss = criterion(outputs, y)
 
         dev_loss += loss.data[0]
         pred = torch.max(outputs, 1)[1]
         dev_correct = (pred == y).sum()
         dev_acc += dev_correct.data[0]
-
-        loss.backward()
-        optimizer.step()
 
     dev_loss = dev_loss / len(dev_dataset)
     dev_acc = float(dev_acc) / len(dev_dataset)
@@ -139,19 +160,16 @@ for epoch in range(epoches):
 
 # test
 test_acc = 0.
-for i, (x, y) in enumerate(test_loader):
+for i, (x, y, z) in enumerate(test_loader):
     x = torch.FloatTensor(x)
     y = torch.LongTensor(y)
     y = torch.max(y, 1)[1]
 
-    outputs = model(x)
+    outputs = model(x, z)
     pred = torch.max(outputs, 1)[1]
     test_correct = (pred == y).sum()
     test_acc += test_correct.data[0]
 
-
 test_acc = float(test_acc) / len(test_dataset)
-print('  - (Training)   accuracy: {accu:3.3f} %'.
+print('  - (Testing)   accuracy: {accu:3.3f} %'.
       format(accu=100 * test_acc))
-
-

@@ -12,6 +12,7 @@ from Model import MyModel
 
 __author__ = "Li Xi"
 
+
 # --------- parameters -------------------
 d_model = 300
 n_head = 6
